@@ -1,0 +1,125 @@
+set docName to "Investments"
+set shtName to "Потребительский рынок"
+set tblName to "Table 1"
+
+set scr to "document.getElementsByClassName(\"snapshot-table2\")"
+set noResScr to "document.getElementsByClassName(\"fv-container\")[0].textContent.includes(\"No results\")"
+
+set ts to {} --tickers
+set rs to {} --rows
+set cs to {"K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "AA", "AB"}
+
+-- Получаем список тикеров для парсинга и запоминаем строки
+tell application "Numbers" to tell document docName's sheet shtName's table tblName
+  repeat with i from 2 to the count of cells of column "A"
+    set t to value of cell i of column "A" as string
+    if t is not "missing value" then
+      set the end of ts to t
+      set the end of rs to i
+    end if
+  end repeat
+end tell
+
+log ts
+log rs
+
+tell application "Safari"
+  tell front window
+    
+    repeat with i from 1 to length of ts
+      repeat 1 times
+        set myTab to make new tab
+        
+        -- без таймаута между запросами, т.к. проходит достаточно
+        -- времени пока выполняется остальная часть скрипта
+        set URL of myTab to "https://finviz.com/quote.ashx?t=" & item i of ts
+        
+        -- дожидаемся загрузки страницы
+        repeat while myTab's source = ""
+          delay 0.5
+        end repeat
+        
+        -- наличие тикера на ресурсе
+        set noResults to do JavaScript noResScr in myTab
+        log "No results for " & item i of ts & ": " & noResults
+        if noResults then
+          close myTab
+          exit repeat
+        end if
+        
+        -- избегаем ситуации когда джаваскрипт иногда может 
+        -- не возвращать значение с загруженной страницы
+        set isDef to false
+        repeat while not isDef
+          set income to do JavaScript scr & "[0].rows[2].cells[1].textContent" in myTab
+          
+          set isDef to true
+          
+          try
+            get income
+          on error number -2753
+            set isDef to false
+            log "not def" & item i of ts
+          end try
+          
+        end repeat
+        
+        -- парсинг остальных значений
+        set sales to do JavaScript scr & "[0].rows[3].cells[1].textContent" in myTab
+        
+        set payout to do JavaScript scr & "[0].rows[10].cells[7].textContent" in myTab
+        
+        set forwardPE to do JavaScript scr & "[0].rows[1].cells[3].textContent" in myTab
+        
+        set PEG to do JavaScript scr & "[0].rows[2].cells[3].textContent" in myTab
+        
+        set PS to do JavaScript scr & "[0].rows[3].cells[3].textContent" in myTab
+        
+        set PB to do JavaScript scr & "[0].rows[4].cells[3].textContent" in myTab
+        
+        set debtE to do JavaScript scr & "[0].rows[9].cells[3].textContent" in myTab
+        
+        set EPSPast5Y to do JavaScript scr & "[0].rows[6].cells[5].textContent" in myTab
+        
+        set EPSNext5Y to do JavaScript scr & "[0].rows[5].cells[5].textContent" in myTab
+        
+        set ROA to do JavaScript scr & "[0].rows[4].cells[7].textContent" in myTab
+        
+        set ROE to do JavaScript scr & "[0].rows[5].cells[7].textContent" in myTab
+        
+        set ROI to do JavaScript scr & "[0].rows[6].cells[7].textContent" in myTab
+        
+        set grossMargin to do JavaScript scr & "[0].rows[7].cells[7].textContent" in myTab
+        
+        set operMargin to do JavaScript scr & "[0].rows[8].cells[7].textContent" in myTab
+        
+        set profitMargin to do JavaScript scr & "[0].rows[9].cells[7].textContent" in myTab
+        
+        set curRatio to do JavaScript scr & "[0].rows[8].cells[3].textContent" in myTab
+        
+        set quickRatio to do JavaScript scr & "[0].rows[7].cells[3].textContent" in myTab
+        
+        -- порядок данных задается вручную в соответствии со 
+        -- структурой таблицы
+        set parsedData to {income, sales, payout, forwardPE, PEG, PS, PB, debtE, EPSPast5Y, EPSNext5Y, ROA, ROE, ROI, grossMargin, operMargin, profitMargin, curRatio, quickRatio}
+        
+        log item i of ts & ": " & parsedData
+        
+        close myTab
+	-- циклом заполняем значения строки, соответствующей 
+        -- текущему тикеру
+        tell application "Numbers"
+          tell document docName
+            tell sheet shtName
+              tell table tblName
+                repeat with c from 1 to length of cs
+                  set value of cell (cs's item c & rs's item i) to parsedData's item c
+                end repeat
+              end tell
+            end tell
+          end tell
+        end tell
+      end repeat
+    end repeat
+  end tell
+end tell
